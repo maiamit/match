@@ -1,0 +1,170 @@
+###Lalonde Matching Assignment - Mai Amit###
+
+
+#Installing libraries and packages that I will need:
+library(foreign)
+install.packages("Matching", dependencies = TRUE)
+install.packages("rgenoud")
+library(Matching)
+library(rgenoud)
+
+#I import and name my data sets, originally txt files, as dataframes:
+
+my_treatment <- read.table("C:\\Users\\Minerva\\Desktop\\matchlalonde\\nswre74_treated.txt")
+my_control <- read.table("C:\\Users\\Minerva\\Desktop\\matchlalonde\\nswre74_control.txt")
+new_control <- read.table("C:\\Users\\Minerva\\Desktop\\matchlalonde\\cps_controls.txt")
+
+
+#Defining the last column, earnings in 78:
+
+treat_78 <- my_treatment[,10]
+control_78 <- my_control[,10]
+
+#Calculating the mean treatment effects for both the treatment and the control groups:
+
+mean(treat_78)
+mean(control_78)
+
+#Results: Mean treatment effect for the treated: 6349.144. Mean treatment effect for the control group: 4554.801. 
+#Difference in means: 1794.342 = this is the treatment effect.
+
+
+#At this point I tried a few different ways to obtain a confidence interval, including running two separate regressions
+#on the treatment and the control (wrong idea) and creating a merged list of '78 earnings for treated and control, which
+#also wasn't the best approach. Eventually used t-test function to determine confidence intervals:
+
+
+t.test(treat_78,control_78, mu=1794.342, var.equal=TRUE, conf.level = 0.95)
+#Confidence intervals are  550.5745 - 3038.1103
+
+#At this point I realized that the txt files are too complicated and I am switching to the stata files.
+
+the_data <- read.dta("C:\\Users\\Minerva\\Desktop\\matchlalonde\\nsw_dw.dta")
+alt_control <- read.dta("C:\\Users\\Minerva\\Desktop\\matchlalonde\\cps_controls.dta")
+
+#removing control group from original data set:
+
+data_nocontrol <- subset(the_data, treat==1)
+
+
+#creating a new data set with the alternative control:
+
+new_data <- rbind(data_nocontrol, alt_control)
+
+#calculating the treatment effect and confidence interval for our new data set:
+
+mean(new_data[new_data$treat==1,]$re78) - mean(new_data[new_data$treat==0,]$re78)
+rgrs_new <- lm(new_data$re78 ~ new_data$treat, new_data)
+#The difference in means (treatment effect) is -8497.516. 
+#The confidence interval for a 95% confidence level is -9893.156 - -7101.877 (I got this using confint)
+
+
+#I am now using the Match() exampleto obtain the weights of the covariates and then match accordingly:
+#Note that some values are weighted because the authors of the example considered them to be of greater importance. 
+#I didn't feel too strongly about changing them, and kept them the way they are. This influenced the SD and in turn
+#the confidence intervals. 
+
+match_1  <- glm(treat~age + I(age^2) + education + I(education^2) + black + hispanic + married + nodegree + re74  + I(re74^2) + re75 + I(re75^2), family=binomial, data=new_data)
+
+
+#Naming the variables I will use in the matching function. 
+
+X1  <- match_1$fitted
+Y1  <- new_data$re78
+Tr1 <- new_data$treat
+
+
+#Matching, based on propensity scores:
+rr  <- Match(Y=Y1, Tr=Tr1, X=X1, M=1)
+
+#The values I got:
+#Estimate...  1732.9 
+#AI SE......  987.78 
+#T-stat.....  1.7544 
+#p.val......  0.079366 
+
+#Using these to calculate confidence intervals:
+#1732.9-(987.78*1.96) = -203.1488, 1732.9+(987.78*1.96) = 3668.949
+#This is a very wide confidence interval that induces a feeling of uncertainty, as it tells us little about the 
+#true treatment effect that can be positioned anywhere along this big range. I learn from this that the population is very
+#diverse, and that our samples are subjet to a significant sampling error (any given sample can be very different from 
+#the other). It is also concerning that it has a negative minimal value, and this is something to consider when evaluting
+#the success of the program. Befor reaching hasty conclusiong, however,we must keep in mind that it is also possible that 
+#without the program, the situation would have been far worse (without the program, someone would have had much lower 
+#earnings in '78 than the low earnings we observed after having the treatment.)
+
+#Note: Calculating the confidence intervals was confusing for me because I wasn't sure what was the correct data to use.
+#I tried using a few online calculators to compute the confidence intervals, and entered the following inputs:
+#Confidence Level:  0.95
+#Sample Size: 185 (becuase I am treating the matched pairs as my sample)
+#Sample Standard Deviation:	987.78 (I am using the SE I got from the rr sumarry)
+#Sample Mean:	1732.9 (treatment effect that I got from the rr summary)
+#The results I got from different calculators were pretty similar. For example, the results from Wolframalpha: 1590 - 1876.
+#I liked this confidence interval because I think it makes sense to have a narrow confidence interval AFTER using matching.
+#However, I think I may have confused the local error with the population error and that distorted my results, and so
+#I decided no to use this interval. 
+
+
+#Now I would like to match not only based on propensity scores but also based on covariates. The approach I am following is
+#essentially creating a "fake covariate" that is the propensity score. 
+
+X2 <- (match_1$fitted + new_data$age + new_data$education + new_data$black + new_data$hispanic + new_data$married + new_data$nodegree + new_data$re74 + new_data$re75)
+
+
+match_2 <- Match(Y=Y1, Tr=Tr1, X=X2, M=1, sample = FALSE);
+
+#Treatment effect after matching is 995.17.
+#Confidence intervals for a 95% confidence level and given a SE of 624.23 is: -228.3208 - 2218.661
+#I have a high p-value of 0.11089, I'm not sure why but it concerns me. I suspect it has to do with the variables I am
+#matching on, that include those weighted intercepts from the original example. I believe that if I should remove them,
+#my p-value would be lower. 
+
+#The GenMatch section:
+attach(new_data)
+
+#Covariates to be matched:
+comatch <- cbind(age, education, black, hispanic, married, nodegree, re75, re74)
+
+#Covariates to be balanced:
+cobalance <- cbind(age, education, black, hispanic, married, nodegree, re75, re74)
+
+#The first step is to use GenMatch to find optimal weights for balance:
+ enout <- GenMatch(Tr=treat, X=comatch, BalanceMatrix=cobalance, estimand="ATT", M=1, pop.size=500, max.generations=10, wait.generations=5)
+#I have changed the "wait.generations" value from 1 to 5 in an attempt to find a better match that will ultimately 
+#lower my p-value.)
+
+#The outcome variable
+OV=re78
+
+#Matching using the weights GenMatch found:
+
+mout <- Match(Y=Y1, Tr=treat, X=comatch, estimand="ATT", Weight.matrix=enout)
+
+#Estimate...  1882.1 
+#AI SE......  979.88 
+#T-stat.....  1.9208 
+#p.val......  0.054759 
+#Solution Found Generation 3
+#Number of Generations Run 9
+#Total run time : 0 hours 8 minutes and 18 seconds
+#I notice that my p-value is lower than in the previous matching process. 
+
+
+
+
+#Veryfying balance on the variables of interest:
+                        
+did_balance <- MatchBalance(treat~age +education+black+ hispanic+ married+ nodegree+ re74+ re75, match.out=mout, nboots=500)
+
+#Before Matching Minimum p.value: < 2.22e-16 
+#Variable Name(s): age education black married nodegree re74 re75  Number(s): 1 2 3 5 6 7 8 
+#After Matching Minimum p.value: 0.076 
+#Variable Name(s): re74  Number(s): 7 
+
+
+
+
+
+
+
+
