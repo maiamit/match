@@ -1,3 +1,10 @@
+Lalonde Matching Assignment - Commented Code
+Mai Amit
+
+My commented code is listed below, and can also be viewed more conveniently on this GitHub link. For easier reading, my comments on this document are purple. 
+If ok to ask, I would especially appreciate your comments on how to interpret a wide confidence interval. Thank you. 
+
+
 ###Lalonde Matching Assignment - Mai Amit###
 
 
@@ -59,7 +66,7 @@ rgrs_new <- lm(new_data$re78 ~ new_data$treat, new_data)
 #The confidence interval for a 95% confidence level is -9893.156 - -7101.877 (I got this using confint)
 
 
-#I am now using the Match() exampleto obtain the weights of the covariates and then match accordingly:
+#I am now using the Match() example to obtain the weights of the covariates and then match accordingly:
 #Note that some values are weighted because the authors of the example considered them to be of greater importance. 
 #I didn't feel too strongly about changing them, and kept them the way they are. This influenced the SD and in turn
 #the confidence intervals. 
@@ -87,9 +94,9 @@ rr  <- Match(Y=Y1, Tr=Tr1, X=X1, M=1)
 #1732.9-(987.78*1.96) = -203.1488, 1732.9+(987.78*1.96) = 3668.949
 #This is a very wide confidence interval that induces a feeling of uncertainty, as it tells us little about the 
 #true treatment effect that can be positioned anywhere along this big range. I learn from this that the population is very
-#diverse, and that our samples are subjet to a significant sampling error (any given sample can be very different from 
-#the other). It is also concerning that it has a negative minimal value, and this is something to consider when evaluting
-#the success of the program. Befor reaching hasty conclusiong, however,we must keep in mind that it is also possible that 
+#diverse, and that our samples are subject to a significant sampling error (any given sample can be very different from 
+#the other). It is also concerning that it has a negative minimal value, and this is something to consider when evaluating
+#the success of the program. Before reaching hasty conclusions, however,we must keep in mind that it is also possible that 
 #without the program, the situation would have been far worse (without the program, someone would have had much lower 
 #earnings in '78 than the low earnings we observed after having the treatment.)
 
@@ -97,12 +104,12 @@ rr  <- Match(Y=Y1, Tr=Tr1, X=X1, M=1)
 #I tried using a few online calculators to compute the confidence intervals, and entered the following inputs:
 #Confidence Level:  0.95
 #Sample Size: 185 (becuase I am treating the matched pairs as my sample)
-#Sample Standard Deviation:	987.78 (I am using the SE I got from the rr sumarry)
+#Sample Standard Deviation:	987.78 (I am using the SE I got from the rr sumary)
 #Sample Mean:	1732.9 (treatment effect that I got from the rr summary)
 #The results I got from different calculators were pretty similar. For example, the results from Wolframalpha: 1590 - 1876.
 #I liked this confidence interval because I think it makes sense to have a narrow confidence interval AFTER using matching.
 #However, I think I may have confused the local error with the population error and that distorted my results, and so
-#I decided no to use this interval. 
+#I decided not to use this interval. 
 
 
 #Now I would like to match not only based on propensity scores but also based on covariates. The approach I am following is
@@ -115,9 +122,7 @@ match_2 <- Match(Y=Y1, Tr=Tr1, X=X2, M=1, sample = FALSE);
 
 #Treatment effect after matching is 995.17.
 #Confidence intervals for a 95% confidence level and given a SE of 624.23 is: -228.3208 - 2218.661
-#I have a high p-value of 0.11089, I'm not sure why but it concerns me. I suspect it has to do with the variables I am
-#matching on, that include those weighted intercepts from the original example. I believe that if I should remove them,
-#my p-value would be lower. 
+#I have a high p-value of 0.1108. I don’t believe that I should be concerned, as when matching it is supposed to be high. 
 
 #The GenMatch section:
 attach(new_data)
@@ -129,9 +134,8 @@ comatch <- cbind(age, education, black, hispanic, married, nodegree, re75, re74)
 cobalance <- cbind(age, education, black, hispanic, married, nodegree, re75, re74)
 
 #The first step is to use GenMatch to find optimal weights for balance:
- enout <- GenMatch(Tr=treat, X=comatch, BalanceMatrix=cobalance, estimand="ATT", M=1, pop.size=500, max.generations=10, wait.generations=5)
-#I have changed the "wait.generations" value from 1 to 5 in an attempt to find a better match that will ultimately 
-#lower my p-value.)
+enout <- GenMatch(Tr=treat, X=comatch, BalanceMatrix=cobalance, estimand="ATT", M=1, pop.size=600, max.generations=10, wait.generations=5)
+
 
 #The outcome variable
 OV=re78
@@ -140,6 +144,16 @@ OV=re78
 
 mout <- Match(Y=Y1, Tr=treat, X=comatch, estimand="ATT", Weight.matrix=enout)
 
+#results:
+#Estimate...  1295.1 
+#AI SE......  988.76 
+#T-stat.....  1.3098 
+#p.val......  0.19026 
+#Solution Found Generation 3
+#Number of Generations Run 9
+#Total run time : 0 hours 11 minutes and 13 seconds
+#I notice that my p-value is lower than in the previous matching process. 
+#I ran it a few times with different values and also noticed that as I increased the values of GenMatch (increased pop size, max generations and wait.generations, my p.value got higher! These were my results from much smaller values:
 #Estimate...  1882.1 
 #AI SE......  979.88 
 #T-stat.....  1.9208 
@@ -147,19 +161,48 @@ mout <- Match(Y=Y1, Tr=treat, X=comatch, estimand="ATT", Weight.matrix=enout)
 #Solution Found Generation 3
 #Number of Generations Run 9
 #Total run time : 0 hours 8 minutes and 18 seconds
-#I notice that my p-value is lower than in the previous matching process. 
 
 
 
+#Verifying balance on the variables of interest:
 
-#Veryfying balance on the variables of interest:
-                        
 did_balance <- MatchBalance(treat~age +education+black+ hispanic+ married+ nodegree+ re74+ re75, match.out=mout, nboots=500)
 
 #Before Matching Minimum p.value: < 2.22e-16 
 #Variable Name(s): age education black married nodegree re74 re75  Number(s): 1 2 3 5 6 7 8 
 #After Matching Minimum p.value: 0.076 
 #Variable Name(s): re74  Number(s): 7 
+
+
+#Running GenMatch a second time, this time for both propensity scores AND covariates:
+#defining new variables for matching and balancing:
+#Covariates to be matched: (now adding the prop scores)
+comatch2 <- cbind(match_1$fitted, age, education, black, hispanic, married, nodegree, re75, re74)
+
+#Covariates to be balanced:
+cobalance2 <- cbind(match_1$fitted, age, education, black, hispanic, married, nodegree, re75, re74)
+
+
+enout2 <- GenMatch(Tr=treat, X=comatch2, BalanceMatrix=cobalance2, estimand="ATT", M=1, pop.size=600, max.generations=10, wait.generations=5)
+#At this point R notified me of its decision to increase “'max.generations' limit by 10 generations to 20 because the #fitness is still improving.” which I thought was very thoughtful of it.
+
+mout2 <- Match(Y=Y1, Tr=treat, X=comatch2, estimand="ATT", Weight.matrix=enout)
+
+
+#Results:
+#Estimate...  1744.7 
+#AI SE......  1006.3 
+#T-stat.....  1.7338 
+#p.val......  0.082949 
+#Solution Found Generation 8
+#Number of Generations Run 14
+#Total run time : 0 hours 17 minutes and 19 seconds
+#The p-value had increased!
+
+
+
+
+
 
 
 
